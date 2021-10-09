@@ -1,0 +1,47 @@
+#!/user/bin/env python
+# -*- coding:utf-8 -*-
+# 作者：周桂华
+# 开发时间: 2021/10/9 21:12
+
+import requests
+import execjs
+
+
+def stringToDict(string):
+    assert '=' in string, '= not in string Please check'
+    dic = {}
+    for item in string.split(';'):
+        dic[item.split('=')[0]] = item.split('=')[1]
+    return dic
+
+
+if __name__ == '__main__':
+
+    url = "http://www.tl.gov.cn/openness/xxgkTarget/?branch_id=5c17685b6032b8388bbd5cf6&column_code=150111&page=4"
+    # 创建会话
+    session = requests.Session()
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36'}
+    session.headers.update(headers)
+    # 第一次请求返回一段js代码
+    first_resp = session.get(url)
+    first_resp.encoding = 'utf-8'
+    # 补环境
+    first_txt = first_resp.text.replace('<script>', 'document = {};\n').replace('location.href=location.pathname+location.search</script>', '')
+    ctx = execjs.compile(first_txt).eval('document.cookie')
+    session.cookies.update(stringToDict(ctx))
+    # 携带第一次请求得到的cookie， 返回一段js
+    sec_resp = session.get(url)
+    sec_resp.encoding = 'utf-8'
+    # 补环境加hook setTimeout方法
+    sec_txt = sec_resp.text.replace('<script>',
+                                    'window=this;\ndocument = {};\nlocation = {};\nnavigator = {"userAgent":'
+                                    ' "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36"};\n'
+                                    'function setTimeout(x1, x2){return x1();};\n').replace('</script>', '')
+    ctx2 = execjs.compile(sec_txt).eval('document.cookie')
+    session.cookies.update(stringToDict(ctx2))
+    # 携带第二次请求得到的cookie， 返回网页文本
+    third_resp = session.get(url)
+    print(third_resp.text)
+
+
+
